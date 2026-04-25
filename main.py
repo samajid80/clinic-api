@@ -8,6 +8,10 @@ import os
 from keyvault_client import get_secret
 from azure.cosmos import CosmosClient
 
+class SecretRequest(BaseModel):
+    secret_name: str
+
+
 class Item(BaseModel):
     name: str
     category: str
@@ -16,6 +20,21 @@ app = FastAPI(title="Clinic API", version="1.0.0")
 
 
 app = FastAPI(title="Clinic API", version="2.0.0")
+
+
+# It should be removed
+# @app.post("/fetch-secret")
+# def fetch_secret(req: SecretRequest):
+#     try:
+#         value = get_secret(req.secret_name)
+#         return {
+#             "secret_name": req.secret_name,
+#             "retrieved": True,
+#             "length": len(value),
+#             "preview": value[:4] + "***" + value[-4:]  # never expose full value
+#         }
+#     except Exception as e:
+#         return {"error": str(e), "retrieved": False}
 
 # On startup: fetch secret from Key Vault using Managed Identity
 # Falls back to env var for local development
