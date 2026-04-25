@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from cosmos_client import get_container
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 import uuid
+import os
+from keyvault_client import get_secret
+from azure.cosmos import CosmosClient
 
 class Item(BaseModel):
     name: str
@@ -11,34 +14,39 @@ class Item(BaseModel):
 
 app = FastAPI(title="Clinic API", version="1.0.0")
 
+
+app = FastAPI(title="Clinic API", version="2.0.0")
+
+# On startup: fetch secret from Key Vault using Managed Identity
+# Falls back to env var for local development
+def get_cosmos_client():
+    try:
+        conn_str = get_secret("CosmosConnectionString")
+    except Exception:
+        # Local dev fallback — use .env file
+        conn_str = os.environ.get("COSMOS_CONNECTION_STRING", "")
+    return CosmosClient.from_connection_string(conn_str)
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "secret_source": "Key Vault"}
+
+@app.get("/secret-demo")
+def secret_demo():
+    # Shows the concept — in real apps never expose secret values!
+    db_password = get_secret("MyDatabasePassword")
+    return {
+        "message": "Secret fetched successfully from Key Vault",
+        "secret_length": len(db_password),
+        "first_char": db_password[0] + "***"
+    }
+
+
 @app.get("/")
 def root():
     return {"message": "Clinic API is running", "status": "ok"}
 
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat()
-    }
 
-@app.get("/items")
-def get_items():
-    return {
-        "items": [
-            {"id": 1, "name": "Panadol", "category": "medicine"},
-            {"id": 2, "name": "Bandage", "category": "supplies"},
-            {"id": 3, "name": "Syringe", "category": "equipment"},
-        ]
-    }
-
-@app.post("/items")
-def create_item(item: Item):
-    return {
-        "message": f"Item '{item.name}' received.",
-        "data": item,
-        "id": 99
-    }
 
 
 # GET all patients from Cosmos DB
