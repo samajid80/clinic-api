@@ -9,7 +9,7 @@ from azure.keyvault.secrets import SecretClient
 
 VAULT_URL = os.environ.get(
     "KEY_VAULT_URL",
-    "https://clinic-vault-yourname.vault.azure.net/"
+    "https://clinic-vault-majid.vault.azure.net/"
 )
 
 def get_secret(secret_name: str) -> str:
