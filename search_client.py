@@ -2,7 +2,7 @@ import os
 from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from azure.core.credentials import AzureKeyCredential
-from openai import OpenAI
+from openai import AzureOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,10 +15,16 @@ def get_search_client() -> SearchClient:
     )
 
 def embed_query(query: str) -> list[float]:
-    client = OpenAI(
-        base_url=os.environ["AZURE_OPENAI_ENDPOINT"] + "openai/v1/",
-        api_key=os.environ["AZURE_OPENAI_KEY"]
-    )
+    # client = OpenAI(
+    #     base_url=os.environ["AZURE_OPENAI_ENDPOINT"] + "openai/v1/",
+    #     api_key=os.environ["AZURE_OPENAI_KEY"]
+    # )
+
+    client = AzureOpenAI(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_key=os.environ["AZURE_OPENAI_KEY"],
+    api_version="2024-02-01"  # <--- Use this version
+)
     response = client.embeddings.create(
         input=query,
         model=os.environ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"]
@@ -52,9 +58,9 @@ def search_clinic_docs(query: str, top: int = 3) -> list[dict]:
     ]
 
 
-# if __name__ == "__main__":
-#     results = search_clinic_docs("What time does the clinic open?")
-#     for r in results:
-#         print(f"Score: {r['score']:.3f} | Source: {r['source']}")
-#         print(f"Content: {r['content'][:200]}...")
-#         print("---")
+if __name__ == "__main__":
+    results = search_clinic_docs("What time does the clinic open?")
+    for r in results:
+        print(f"Score: {r['score']:.3f} | Source: {r['source']}")
+        print(f"Content: {r['content'][:200]}...")
+        print("---")
