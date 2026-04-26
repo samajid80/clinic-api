@@ -58,9 +58,9 @@ def search_clinic_docs(query: str, top: int = 3) -> list[dict]:
     ]
 
 
-if __name__ == "__main__":
-    results = search_clinic_docs("What time does the clinic open?")
-    for r in results:
-        print(f"Score: {r['score']:.3f} | Source: {r['source']}")
-        print(f"Content: {r['content'][:200]}...")
-        print("---")
+# if __name__ == "__main__":
+#     results = search_clinic_docs("What time does the clinic open?")
+#     for r in results:
+#         print(f"Score: {r['score']:.3f} | Source: {r['source']}")
+#         print(f"Content: {r['content'][:200]}...")
+#         print("---")
