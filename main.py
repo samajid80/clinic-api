@@ -10,6 +10,7 @@ from keyvault_client import get_secret
 from azure.cosmos import CosmosClient
 from openai_client import get_openai_client, DEPLOYMENT
 from typing import List
+from search_client import search_clinic_docs
 
 
 SYSTEM_PROMPT = SYSTEM_PROMPT = """You are Scarlet, a friendly and professional AI
@@ -36,6 +37,31 @@ STRICT RULES:
 
 TONE: Warm, clear, professional. Respond in the same
 language the patient uses English."""
+
+RAG_SYSTEM_PROMPT = """You are Zara, the AI assistant for Shifa
+Medical Clinic in Karachi. Answer the patient's question using
+ONLY the information provided in the context below.
+
+Rules:
+- If the answer is clearly in the context, answer directly and helpfully
+- If the context does not contain the answer, say:
+  "I don't have that information. Please call us at 021-3456-7890."
+- Never make up information not in the context
+- Keep answers concise — 2-4 sentences unless more detail is needed
+- Always offer to help with anything else at the end"""
+
+
+class AskRequest(BaseModel):
+    question: str
+
+class SourceDoc(BaseModel):
+    source: str
+    score: float
+
+class AskResponse(BaseModel):
+    answer: str
+    sources: list[SourceDoc]
+    tokens_used: int
 
 class Message(BaseModel):
     role: str     # "user" or "assistant"
@@ -65,6 +91,58 @@ class Item(BaseModel):
     category: str
 
 app = FastAPI(title="Clinic API", version="1.0.0")
+
+
+
+@app.post("/ask", response_model=AskResponse)
+def ask(request: AskRequest):
+    # Step 1: Retrieve relevant chunks from AI Search
+    docs = search_clinic_docs(request.question, top=3)
+
+    if not docs:
+        return AskResponse(
+            answer="I could not find relevant information. Please call 021-3456-7890.",
+            sources=[],
+            tokens_used=0
+        )
+
+    # Step 2: Build context string from retrieved chunks
+    # FIX: Used triple quotes for the joiner and the f-string for clarity
+    context = "\n---\n".join([
+        f"Source: {d['source']}\n{d['content']}"
+        for d in docs
+    ])
+
+    # Step 3: Call GPT-4o with context injected into prompt
+    client = get_openai_client()
+    
+    # FIX: Wrapped the multi-line user content in triple quotes or used \n
+    user_content = f"""Context:
+{context}
+
+Question: {request.question}"""
+
+    response = client.chat.completions.create(
+        model=DEPLOYMENT,
+        messages=[
+            {"role": "system", "content": RAG_SYSTEM_PROMPT},
+            {"role": "user",   "content": user_content}
+        ],
+        max_tokens=600,
+        temperature=0.3   # lower temp for factual, grounded answers
+    )
+
+    answer = response.choices[0].message.content
+
+    return AskResponse(
+        answer=answer,
+        # FIX: Ensure d["score"] is handled safely in case it's None
+        sources=[
+            SourceDoc(source=d["source"], score=round(d.get("score", 0) or 0, 3)) 
+            for d in docs
+        ],
+        tokens_used=response.usage.total_tokens
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)
