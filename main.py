@@ -1,15 +1,44 @@
 from fastapi import FastAPI
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional
 from cosmos_client import get_container
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 import uuid
 import os
 from keyvault_client import get_secret
 from azure.cosmos import CosmosClient
+from openai_client import get_openai_client, DEPLOYMENT
+from typing import List
 
-class SecretRequest(BaseModel):
-    secret_name: str
+
+SYSTEM_PROMPT = """You are a helpful assistant for a medical clinic
+in USA. Help patients with general health questions,
+appointment scheduling queries, and clinic information.
+Never provide diagnoses. Always recommend seeing a doctor for
+medical decisions. Keep responses concise and clear."""
+
+class Message(BaseModel):
+    role: str     # "user" or "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[Message] = []   # conversation history from client
+    session_id: Optional[str] = None
+
+# class ChatRequest(BaseModel):
+#     message: str
+#     session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    reply: str
+    model: str
+    tokens_used: int
+
+
+# class SecretRequest(BaseModel):
+#     secret_name: str
 
 
 class Item(BaseModel):
@@ -19,8 +48,53 @@ class Item(BaseModel):
 app = FastAPI(title="Clinic API", version="1.0.0")
 
 
-app = FastAPI(title="Clinic API", version="2.0.0")
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest):
+    client = get_openai_client()
 
+
+
+    ### Chat Completions API
+    # Build the messages array:
+    # 1. System prompt always comes first
+    # 2. Last 5 history messages (to control token cost)
+    # 3. Current user message last
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    recent_history = request.history[-5:]  # keep last 5 exchanges
+    for msg in recent_history:
+        messages.append({"role": msg.role, "content": msg.content})
+
+    messages.append({"role": "user", "content": request.message})
+
+
+    response = client.chat.completions.create(
+        model=DEPLOYMENT,
+        messages=messages,
+        max_tokens=500,      # hard cap to control costs
+        temperature=0.7,     # 0=deterministic, 1=creative
+    )
+
+
+    return ChatResponse(
+        reply=response.choices[0].message.content,
+        model=response.model,
+        tokens_used=response.usage.total_tokens
+    )
+
+
+### Responses API
+    # response = client.responses.create(
+    #     instructions=SYSTEM_PROMPT,
+    #     input=request.message,
+    #     model=DEPLOYMENT
+    # )
+
+    # return ChatResponse(
+    #     reply=response.output_text,
+    #     model=response.model,
+    #     tokens_used=response.usage.total_tokens
+    # )
 
 # It should be removed
 # @app.post("/fetch-secret")
